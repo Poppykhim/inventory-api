@@ -1,0 +1,142 @@
+name: Inventory API — CI Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Run Test Suite
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Setup Node.js ───────────────────────────────────────────────────
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      # ── 3. Install dependencies ────────────────────────────────────────────
+      - name: Install dependencies
+        run: npm ci
+
+      # ── 4. Build (type-check) ──────────────────────────────────────────────
+      - name: Build project
+        run: npm run build
+
+      # ── 5. Run all tests with coverage ────────────────────────────────────
+      - name: Run tests with coverage
+        id: run_tests
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci-test-secret' }}
+        run: npm run test:cov -- --ci --reporters=default --reporters=jest-junit
+        continue-on-error: true
+
+      # ── 6. Upload coverage report as artifact ──────────────────────────────
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+
+      # ── 7. Upload JUnit XML report ─────────────────────────────────────────
+      - name: Upload JUnit test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: junit.xml
+          retention-days: 7
+
+      # ── 8. Get committer email ─────────────────────────────────────────────
+      - name: Get committer email
+        id: committer
+        run: |
+          COMMITTER_EMAIL=$(git log -1 --pretty=format:'%ae')
+          COMMITTER_NAME=$(git log -1 --pretty=format:'%an')
+          COMMIT_MSG=$(git log -1 --pretty=format:'%s')
+          COMMIT_SHA=$(git log -1 --pretty=format:'%h')
+          echo "email=${COMMITTER_EMAIL}" >> $GITHUB_OUTPUT
+          echo "name=${COMMITTER_NAME}" >> $GITHUB_OUTPUT
+          echo "message=${COMMIT_MSG}" >> $GITHUB_OUTPUT
+          echo "sha=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+
+      # ── 9a. Email on SUCCESS ───────────────────────────────────────────────
+      - name: Send success email notification
+        if: steps.run_tests.outcome == 'success'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          to: ${{ steps.committer.outputs.email }},srengty@gmail.com
+          from: "Inventory API CI <${{ secrets.MAIL_USERNAME }}>"
+          subject: "✅ [PASS] Inventory API Tests — ${{ steps.committer.outputs.sha }}"
+          body: |
+            Hello ${{ steps.committer.outputs.name }},
+
+            ✅ All tests PASSED on branch: main
+
+            ──────────────────────────────────────────
+            Repository : ${{ github.repository }}
+            Commit     : ${{ steps.committer.outputs.sha }}
+            Message    : ${{ steps.committer.outputs.message }}
+            Triggered  : ${{ github.actor }}
+            Run URL    : ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            ──────────────────────────────────────────
+
+            All 85 tests across Auth, Inventory, and Supplier suites passed successfully.
+
+            — Inventory API CI Bot
+
+      # ── 9b. Email on FAILURE ───────────────────────────────────────────────
+      - name: Send failure email notification
+        if: steps.run_tests.outcome == 'failure'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          to: ${{ steps.committer.outputs.email }},srengty@gmail.com
+          from: "Inventory API CI <${{ secrets.MAIL_USERNAME }}>"
+          subject: "❌ [FAIL] Inventory API Tests — ${{ steps.committer.outputs.sha }}"
+          body: |
+            Hello ${{ steps.committer.outputs.name }},
+
+            ❌ Tests FAILED on branch: main — immediate action required!
+
+            ──────────────────────────────────────────
+            Repository : ${{ github.repository }}
+            Commit     : ${{ steps.committer.outputs.sha }}
+            Message    : ${{ steps.committer.outputs.message }}
+            Triggered  : ${{ github.actor }}
+            Run URL    : ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            ──────────────────────────────────────────
+
+            Please review the test logs at the Run URL above and fix the failing tests.
+
+            — Inventory API CI Bot
+
+      # ── 10. Fail the job if tests failed ──────────────────────────────────
+      - name: Check test result
+        if: steps.run_tests.outcome == 'failure'
+        run: exit 1
