@@ -1,0 +1,132 @@
+name: Inventory UI — CI Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Run E2E & Unit Tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Setup Node.js ───────────────────────────────────────────────────
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      # ── 3. Install dependencies ────────────────────────────────────────────
+      - name: Install dependencies
+        run: npm ci
+
+      # ── 4. Build (type-check) ──────────────────────────────────────────────
+      - name: Build project
+        run: npm run build
+
+      # ── 5. Run all tests (unit + e2e) ───────────────────────────────────────
+      - name: Run tests
+        id: run_tests
+        run: npm run test:e2e
+        continue-on-error: true
+
+      # ── 6. Upload Cypress screenshots on failure ──────────────────────────
+      - name: Upload Cypress screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-screenshots
+          path: cypress/screenshots/
+          retention-days: 7
+
+      # ── 7. Get committer info ──────────────────────────────────────────────
+      - name: Get committer info
+        id: committer
+        run: |
+          COMMITTER_EMAIL=$(git log -1 --pretty=format:'%ae')
+          COMMITTER_NAME=$(git log -1 --pretty=format:'%an')
+          COMMIT_MSG=$(git log -1 --pretty=format:'%s')
+          COMMIT_SHA=$(git log -1 --pretty=format:'%h')
+          echo "email=${COMMITTER_EMAIL}" >> $GITHUB_OUTPUT
+          echo "name=${COMMITTER_NAME}" >> $GITHUB_OUTPUT
+          echo "message=${COMMIT_MSG}" >> $GITHUB_OUTPUT
+          echo "sha=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+
+      # ── 8a. Email on SUCCESS ────────────────────────────────────────────────
+      - name: Send success email notification
+        if: steps.run_tests.outcome == 'success'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          to: ${{ steps.committer.outputs.email }},srengty@gmail.com
+          from: "Inventory UI CI <${{ secrets.MAIL_USERNAME }}>"
+          subject: "✅ [PASS] Inventory UI Tests — ${{ steps.committer.outputs.sha }}"
+          body: |
+            Hello ${{ steps.committer.outputs.name }},
+
+            ✅ All tests PASSED on branch: main
+
+            ──────────────────────────────────────────
+            Repository : ${{ github.repository }}
+            Commit     : ${{ steps.committer.outputs.sha }}
+            Message    : ${{ steps.committer.outputs.message }}
+            Triggered  : ${{ github.actor }}
+            Run URL    : ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            ──────────────────────────────────────────
+
+            All e2e and unit tests passed successfully.
+
+            — Inventory UI CI Bot
+
+      # ── 8b. Email on FAILURE ───────────────────────────────────────────────
+      - name: Send failure email notification
+        if: steps.run_tests.outcome == 'failure'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          to: ${{ steps.committer.outputs.email }},srengty@gmail.com
+          from: "Inventory UI CI <${{ secrets.MAIL_USERNAME }}>"
+          subject: "❌ [FAIL] Inventory UI Tests — ${{ steps.committer.outputs.sha }}"
+          body: |
+            Hello ${{ steps.committer.outputs.name }},
+
+            ❌ Tests FAILED on branch: main — immediate action required!
+
+            ──────────────────────────────────────────
+            Repository : ${{ github.repository }}
+            Commit     : ${{ steps.committer.outputs.sha }}
+            Message    : ${{ steps.committer.outputs.message }}
+            Triggered  : ${{ github.actor }}
+            Run URL    : ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            ──────────────────────────────────────────
+
+            Please review the test logs at the Run URL above and fix the failing tests.
+            Screenshots of failures are attached as artifacts.
+
+            — Inventory UI CI Bot
+
+      # ── 9. Fail the job if tests failed ────────────────────────────────────
+      - name: Check test result
+        if: steps.run_tests.outcome == 'failure'
+        run: exit 1
