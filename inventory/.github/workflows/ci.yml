@@ -76,8 +76,8 @@ jobs:
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
           to: ${{ steps.committer.outputs.email }},srengty@gmail.com
-          from: "Inventory UI CI <${{ secrets.MAIL_USERNAME }}>"
-          subject: "✅ [PASS] Inventory UI Tests — ${{ steps.committer.outputs.sha }}"
+          from: 'Inventory UI CI <${{ secrets.MAIL_USERNAME }}>'
+          subject: '✅ [PASS] Inventory UI Tests — ${{ steps.committer.outputs.sha }}'
           body: |
             Hello ${{ steps.committer.outputs.name }},
 
@@ -106,8 +106,8 @@ jobs:
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
           to: ${{ steps.committer.outputs.email }},srengty@gmail.com
-          from: "Inventory UI CI <${{ secrets.MAIL_USERNAME }}>"
-          subject: "❌ [FAIL] Inventory UI Tests — ${{ steps.committer.outputs.sha }}"
+          from: 'Inventory UI CI <${{ secrets.MAIL_USERNAME }}>'
+          subject: '❌ [FAIL] Inventory UI Tests — ${{ steps.committer.outputs.sha }}'
           body: |
             Hello ${{ steps.committer.outputs.name }},
 
