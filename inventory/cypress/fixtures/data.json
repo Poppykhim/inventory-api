@@ -1,0 +1,29 @@
+{
+  "adminUser": {
+    "username": "admin",
+    "email": "admin@test.com",
+    "password": "admin123",
+    "role": "admin"
+  },
+  "regularUser": {
+    "username": "testuser",
+    "email": "testuser@test.com",
+    "password": "user1234",
+    "role": "user"
+  },
+  "supplier": {
+    "name": "Test Supplier Co.",
+    "email": "supplier@test.com",
+    "phone": "+1-555-9999",
+    "address": "99 Test Ave, NY 10001"
+  },
+  "inventoryItem": {
+    "name": "Test Widget",
+    "sku": "TW-001",
+    "description": "A test widget",
+    "quantity": 100,
+    "minStockLevel": 10,
+    "price": 9.99,
+    "category": "Electronics"
+  }
+}
